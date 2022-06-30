@@ -38,6 +38,52 @@ void err(const char* _message)
 	exit(1);
 }
 
+bool handleInjectToProcess(rtm::CommandLine& _cmdLine, const char* &_pid, bool is_end)
+{
+	const char* MTunerDirConst = _cmdLine.getArg(0);
+	char MTunerDir[1024];
+	strcpy(MTunerDir, MTunerDirConst);
+	rtm::pathCanonicalize(MTunerDir);
+
+	// 去掉MTunerDir中的“MTuner.exe”，保留目录的路径
+	char* exePos = strstr(MTunerDir, "MTuner.exe");
+	if (!exePos)
+		exePos = strstr(MTunerDir, "mtuner.exe");
+	if (!exePos)
+		exePos = strstr(MTunerDir, "MTuner_debug.exe");
+	if (!exePos)
+		exePos = strstr(MTunerDir, "MTuner_release.exe");
+	exePos[0] = L'\0';
+
+	char inject32[512];
+	char inject64[512];
+	strcpy(inject32, MTunerDir);
+	strcpy(inject64, MTunerDir);
+	strcat(inject32, "MTunerInject32.exe");
+	strcat(inject64, "MTunerInject64.exe");
+
+	char cmdLine32[4096];
+	strcpy(cmdLine32, "\"");
+	strcat(cmdLine32, inject32);
+	is_end ? strcat(cmdLine32, "\" #end#") : strcat(cmdLine32, "\" #pid#");
+	strcat(cmdLine32, _pid);
+	is_end ? strcat(cmdLine32, "#end#") : strcat(cmdLine32, "#pid#");
+
+	char cmdLine64[4096];
+	strcpy(cmdLine64, "\"");
+	strcat(cmdLine64, inject64);
+	is_end ? strcat(cmdLine64, "\" #end#") : strcat(cmdLine64, "\" #pid#");
+	strcat(cmdLine64, _pid);
+	is_end ? strcat(cmdLine64, "#end#") : strcat(cmdLine64, "#pid#");
+
+	if (!rdebug::processRun(cmdLine64))
+	{
+		return rdebug::processRun(cmdLine32);
+	}
+
+	return true;
+}
+
 bool handleInject(rtm::CommandLine& _cmdLine)
 {
 	const char* profileExeConst	= NULL;
@@ -58,11 +104,13 @@ bool handleInject(rtm::CommandLine& _cmdLine)
 	char MTunerDir[1024];
 	strcpy(MTunerDir, MTunerDirConst);
 	rtm::pathCanonicalize(MTunerDir);
-	
+
+	// 去掉MTunerDir中的“MTuner.exe”，保留目录的路径
 	char* exePos = strstr(MTunerDir, "MTuner.exe");
 	if (!exePos)
 		exePos = strstr(MTunerDir, "mtuner.exe");
-
+	if (!exePos)
+		exePos = strstr(MTunerDir, "MTuner_debug.exe");
 	exePos[0] = L'\0';
 
 	char workingDir[512];
@@ -209,6 +257,32 @@ int handleCommandLine(int argc, char const* argv[])
 		return 0;
 	}
 
+	// 输入进程ID，对该进程进行profile
+	const char* pid = NULL;
+	if (cmdLine.getArg("pid", pid))
+	{
+#if RTM_PLATFORM_WINDOWS
+		wchar_t capturePath[512];
+		getStoragePath(capturePath);
+		wcscat(capturePath, L"\\MTuner\\");
+		rtm::Console::info("Capture location: %s\n", rtm::WideToMulti(capturePath));
+#endif
+		handleInjectToProcess(cmdLine, pid, false);
+		return 0;
+	}
+
+	// 输入进程ID，结束对该进程的profile
+	if (cmdLine.getArg("end", pid))
+	{
+#if RTM_PLATFORM_WINDOWS
+		wchar_t capturePath[512];
+		getStoragePath(capturePath);
+		wcscat(capturePath, L"\\MTuner\\");
+		rtm::Console::info("Capture location: %s\n", rtm::WideToMulti(capturePath));
+#endif
+		handleInjectToProcess(cmdLine, pid, true);
+		return 0;
+	}
 	const char* profileExe = NULL;
 	if (cmdLine.getArg('p', profileExe))
 	{

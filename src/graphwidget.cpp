@@ -440,7 +440,7 @@ void GraphWidget::wheelEvent(QWheelEvent* _event)
 {
 	RTM_UNUSED(_event);
 	int delta = _event->angleDelta().y();
-	QPointF position = _event->position();
+	QPointF position = _event->posF();
 	uint64_t relTime = mapPosToTime(position.x());
 	if (delta < 0)
 		zoomOut(relTime);
